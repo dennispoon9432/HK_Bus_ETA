@@ -5,6 +5,7 @@ import { soundManager } from '../utils/sound';
 import { getStoredAlarm, saveStoredAlarm } from '../services/storage';
 import { AlarmModal } from './AlarmModal';
 import { AlarmRingingOverlay } from './AlarmRingingOverlay';
+import { HelpGuideModal } from './HelpGuideModal';
 import {
   Star,
   RefreshCw,
@@ -22,6 +23,7 @@ import {
   Radio,
   Zap,
   Info,
+  HelpCircle,
   Bell,
   BellRing,
   CheckCircle2,
@@ -92,6 +94,21 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
   const [isAlarmModalOpen, setIsAlarmModalOpen] = useState(false);
   const [alarmTargetIndex, setAlarmTargetIndex] = useState<number>(0);
   const [isAlarmRinging, setIsAlarmRinging] = useState(false);
+
+  // Help & Info modal
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+
+  // Toast feedback notification
+  const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'warn' } | null>(null);
+  const toastTimerRef = useRef<any>(null);
+
+  const showToast = useCallback((message: string, type: 'info' | 'success' | 'warn' = 'info') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+    }, 4000);
+  }, []);
 
   // Notification sound tracking so we don't repeat chime constantly
   const chimedEtaRef = useRef<string | null>(null);
@@ -243,10 +260,11 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
   // Wake Lock handler
   const toggleWakeLock = async () => {
     if (!('wakeLock' in navigator)) {
-      alert(
+      showToast(
         lang === 'tc'
-          ? '您的瀏覽器不支援 Screen Wake Lock API'
-          : 'Screen Wake Lock is not supported on this browser'
+          ? '您的瀏覽器不支援螢幕常亮功能（Screen Wake Lock API）'
+          : 'Screen Wake Lock API is not supported on this browser',
+        'warn'
       );
       return;
     }
@@ -256,29 +274,106 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
         await wakeLockSentinelRef.current.release();
         wakeLockSentinelRef.current = null;
         setIsWakeLockActive(false);
+        showToast(
+          lang === 'tc' ? '已關閉螢幕防待機模式' : 'Screen Wake Lock turned off',
+          'info'
+        );
       } else {
         const sentinel = await (navigator as any).wakeLock.request('screen');
         wakeLockSentinelRef.current = sentinel;
         setIsWakeLockActive(true);
+        showToast(
+          lang === 'tc'
+            ? '✅ 螢幕防待機已開啟！螢幕將保持長亮不休眠'
+            : '✅ Screen Wake Lock active! Screen will stay on',
+          'success'
+        );
         sentinel.addEventListener('release', () => {
           setIsWakeLockActive(false);
           wakeLockSentinelRef.current = null;
         });
       }
-    } catch (err) {
-      console.warn('Wake lock failed', err);
+    } catch (err: any) {
+      console.warn('Wake lock error:', err);
+      setIsWakeLockActive(false);
+      showToast(
+        lang === 'tc'
+          ? 'ℹ️ 內嵌預覽視窗被瀏覽器安全政策限制常亮。在獨立分頁或已部署的 GitHub Pages 上打開即可完美生效！'
+          : 'ℹ️ Wake Lock restricted by preview iframe security. Works in standalone browser tab or GitHub Pages!',
+        'info'
+      );
     }
   };
 
   // Fullscreen handler
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+        showToast(
+          lang === 'tc' ? '已進入全螢幕模式' : 'Entered fullscreen mode',
+          'success'
+        );
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+        setIsFullscreen(false);
+        showToast(
+          lang === 'tc' ? '已退出全螢幕' : 'Exited fullscreen mode',
+          'info'
+        );
+      }
+    } catch (err) {
+      console.warn('Fullscreen error:', err);
+      showToast(
+        lang === 'tc'
+          ? 'ℹ️ 內嵌視窗被瀏覽器限制全螢幕。請在獨立分頁或 GitHub Pages 網址直接打開，即可一鍵全螢幕！'
+          : 'ℹ️ Fullscreen restricted in embedded preview frame. Open in a standalone tab or GitHub Pages!',
+        'info'
+      );
     }
+  };
+
+  // Sound toggle with immediate chime feedback
+  const handleToggleAudio = () => {
+    const willEnable = !audioAlertEnabled;
+    onToggleAudioAlert();
+    if (willEnable) {
+      soundManager.playChime();
+      showToast(
+        lang === 'tc'
+          ? '🔊 到站語音提示已開啟！(當巴士還有 3 分鐘時發出提示音及宣讀)'
+          : '🔊 Arrival audio alerts enabled! (Chimes & speaks at <= 3 min)',
+        'success'
+      );
+    } else {
+      showToast(
+        lang === 'tc' ? '🔇 已關閉語音提示 (靜音模式)' : '🔇 Audio alert muted',
+        'info'
+      );
+    }
+  };
+
+  // Theme cycle with toast feedback
+  const handleCycleTheme = () => {
+    const themes: DisplayTheme[] = ['led-amber', 'cyber-dark', 'bus-stop-green', 'clean-light'];
+    const themeNames: Record<DisplayTheme, { tc: string; en: string }> = {
+      'led-amber': { tc: '經典琥珀 LED 點陣', en: 'Classic Amber LED' },
+      'cyber-dark': { tc: '賽博黑金高對比', en: 'Cyber Dark' },
+      'bus-stop-green': { tc: '巴士站牌綠光', en: 'Bus Stop Green' },
+      'clean-light': { tc: '明亮日間白底', en: 'Clean Light' },
+    };
+    const nextIndex = (themes.indexOf(theme) + 1) % themes.length;
+    const nextTheme = themes[nextIndex];
+    onChangeTheme(nextTheme);
+    showToast(
+      lang === 'tc'
+        ? `🎨 切換色彩主題：${themeNames[nextTheme].tc}`
+        : `🎨 Theme switched: ${themeNames[nextTheme].en}`,
+      'info'
+    );
   };
 
   useEffect(() => {
@@ -477,7 +572,7 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
 
           {/* Audio Chime alert toggle */}
           <button
-            onClick={onToggleAudioAlert}
+            onClick={handleToggleAudio}
             className={`p-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-colors ${
               audioAlertEnabled
                 ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
@@ -488,8 +583,8 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
             title={
               lang === 'tc'
                 ? audioAlertEnabled
-                  ? '到站語音提示已啟用 (<=3分鐘提示)'
-                  : '開啟到站提示音'
+                  ? '到站語音提示已啟用 (點擊靜音)'
+                  : '開啟到站提示音 (<=3分鐘提示)'
                 : 'Toggle arrival audio announcement'
             }
           >
@@ -505,17 +600,13 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
 
           {/* Theme Switcher Cycle */}
           <button
-            onClick={() => {
-              const themes: DisplayTheme[] = ['led-amber', 'cyber-dark', 'bus-stop-green', 'clean-light'];
-              const nextIndex = (themes.indexOf(theme) + 1) % themes.length;
-              onChangeTheme(themes[nextIndex]);
-            }}
+            onClick={handleCycleTheme}
             className={`p-2 rounded-xl border transition-colors ${
               isLight
                 ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
                 : 'border-neutral-800 text-neutral-300 hover:bg-neutral-800'
             }`}
-            title={lang === 'tc' ? '切換螢幕色彩模式' : 'Change display theme'}
+            title={lang === 'tc' ? '切換螢幕色彩風格' : 'Change display theme'}
           >
             {isLight ? <Moon className="w-3.5 h-3.5" /> : <Sun className="w-3.5 h-3.5" />}
           </button>
@@ -543,6 +634,20 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
             title={lang === 'tc' ? '全螢幕模式' : 'Fullscreen'}
           >
             {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+          </button>
+
+          {/* Feature Guide / Help button */}
+          <button
+            onClick={() => setIsHelpOpen(true)}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border transition-colors text-xs font-bold ${
+              isLight
+                ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                : 'border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:text-white'
+            }`}
+            title={lang === 'tc' ? '頂部各按鈕功能說明' : 'Top Bar Features Guide'}
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden lg:inline">{lang === 'tc' ? '說明' : 'Help'}</span>
           </button>
 
           {/* GitHub Pages free hosting guide */}
@@ -1038,6 +1143,28 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
           </button>
         </div>
       </footer>
+
+      {/* FLOATING TOAST FEEDBACK NOTIFICATION */}
+      {toast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 max-w-md w-[92%] sm:w-auto px-4 py-2.5 rounded-xl shadow-2xl border text-xs sm:text-sm font-bold flex items-center justify-between gap-3 animate-fade-in backdrop-blur-md bg-neutral-900/95 border-amber-500/50 text-neutral-100">
+          <div className="flex items-center gap-2">
+            <span>{toast.message}</span>
+          </div>
+          <button
+            onClick={() => setToast(null)}
+            className="text-neutral-400 hover:text-white p-1"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* TOP BAR & FEATURES HELP GUIDE MODAL */}
+      <HelpGuideModal
+        isOpen={isHelpOpen}
+        onClose={() => setIsHelpOpen(false)}
+        lang={lang}
+      />
 
       {/* ALARM CONFIGURATION MODAL */}
       <AlarmModal

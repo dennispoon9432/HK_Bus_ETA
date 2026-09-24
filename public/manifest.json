@@ -1,0 +1,32 @@
+{
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "name": "HK Bus ETA - 香港巴士實時到站",
+  "short_name": "HK Bus ETA",
+  "description": "Hong Kong Bus Real-time ETA Large Screen Display with route selection and arrival alerts.",
+  "theme_color": "#0a0c10",
+  "background_color": "#0a0c10",
+  "display": "standalone",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

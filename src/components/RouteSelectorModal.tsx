@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BusCompany, RouteItem, StopItem, Language } from '../types/bus';
 import { getRoutes, getRouteStops } from '../services/busApi';
-import { calculateDistanceKm, formatDistance } from '../utils/geo';
 import {
   Search,
   X,
@@ -9,9 +8,7 @@ import {
   Compass,
   ArrowRight,
   Loader2,
-  Navigation,
   ChevronRight,
-  Sparkles,
   RotateCcw
 } from 'lucide-react';
 
@@ -50,11 +47,6 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
   const [isLoadingStops, setIsLoadingStops] = useState(false);
   const [stopSearch, setStopSearch] = useState('');
 
-  // Geolocation
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [isLocating, setIsLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
-
   // Load routes when company changes
   useEffect(() => {
     if (!isOpen) return;
@@ -81,31 +73,6 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
       isCancelled = true;
     };
   }, [activeCompany, isOpen]);
-
-  // Request user location on demand
-  const handleLocateUser = () => {
-    if (!navigator.geolocation) {
-      setLocationError(lang === 'tc' ? '瀏覽器不支援定位' : 'Geolocation not supported');
-      return;
-    }
-    setIsLocating(true);
-    setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setUserLocation({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        });
-        setIsLocating(false);
-      },
-      (err) => {
-        console.warn('Geolocation failed', err);
-        setLocationError(lang === 'tc' ? '無法獲取位置' : 'Location unavailable');
-        setIsLocating(false);
-      },
-      { timeout: 8000, enableHighAccuracy: true }
-    );
-  };
 
   // Group or filter routes
   const filteredRoutes = useMemo(() => {
@@ -160,7 +127,7 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
     );
   };
 
-  // Filter stops by text and sort nearest if location exists
+  // Filter stops by text
   const processedStops = useMemo(() => {
     let list = [...stops];
     if (stopSearch.trim()) {
@@ -172,28 +139,8 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
           String(s.seq) === q
       );
     }
-    return list.map((s) => {
-      let distanceKm: number | null = null;
-      if (userLocation && s.lat && s.lng) {
-        distanceKm = calculateDistanceKm(userLocation.lat, userLocation.lng, s.lat, s.lng);
-      }
-      return { ...s, distanceKm };
-    });
-  }, [stops, stopSearch, userLocation]);
-
-  // Nearest stop
-  const nearestStop = useMemo(() => {
-    if (!userLocation) return null;
-    let closest: (StopItem & { distanceKm?: number | null }) | null = null;
-    for (const s of processedStops) {
-      if (s.distanceKm !== null && s.distanceKm !== undefined) {
-        if (!closest || (closest.distanceKm && s.distanceKm < closest.distanceKm)) {
-          closest = s;
-        }
-      }
-    }
-    return closest;
-  }, [processedStops, userLocation]);
+    return list;
+  }, [stops, stopSearch]);
 
   if (!isOpen) return null;
 
@@ -538,34 +485,7 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                     </button>
                   )}
                 </div>
-
-                {/* Locate Nearest Button */}
-                <button
-                  type="button"
-                  onClick={handleLocateUser}
-                  disabled={isLocating}
-                  className="flex items-center justify-center gap-2 px-3.5 py-2 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-xs font-semibold text-amber-400 rounded-xl transition-colors shrink-0"
-                >
-                  {isLocating ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
-                  ) : (
-                    <Navigation className="w-3.5 h-3.5 text-amber-400" />
-                  )}
-                  <span>
-                    {isLocating
-                      ? lang === 'tc'
-                        ? '正在定位...'
-                        : 'Locating...'
-                      : lang === 'tc'
-                      ? '尋找最近的巴士站'
-                      : 'Find Nearest Stop'}
-                  </span>
-                </button>
               </div>
-
-              {locationError && (
-                <p className="text-xs text-red-400">{locationError}</p>
-              )}
 
               {/* Stops list */}
               <div>
@@ -574,14 +494,6 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                     {lang === 'tc' ? '選擇乘搭分站' : 'Select Boarding Stop'} (
                     {processedStops.length})
                   </span>
-                  {nearestStop && (
-                    <span className="text-xs text-amber-400 flex items-center gap-1 font-medium">
-                      <Sparkles className="w-3 h-3" />
-                      {lang === 'tc' ? '最近站點:' : 'Nearest:'}{' '}
-                      {lang === 'tc' ? nearestStop.name_tc : nearestStop.name_en} (
-                      {formatDistance(nearestStop.distanceKm!)})
-                    </span>
-                  )}
                 </div>
 
                 {isLoadingStops ? (
@@ -600,7 +512,6 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                 ) : (
                   <div className="divide-y divide-neutral-800/80 border border-neutral-800 rounded-xl overflow-hidden max-h-[420px] overflow-y-auto bg-neutral-950">
                     {processedStops.map((stop) => {
-                      const isClosest = nearestStop?.stopId === stop.stopId;
                       return (
                         <button
                           key={stop.stopId}
@@ -627,27 +538,16 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                             });
                             onClose();
                           }}
-                          className={`w-full flex items-center justify-between p-3.5 hover:bg-neutral-900 transition-all text-left group ${
-                            isClosest
-                              ? 'bg-amber-950/25 border-l-4 border-amber-400'
-                              : 'border-l-4 border-transparent'
-                          }`}
+                          className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-900 transition-all text-left group border-l-4 border-transparent hover:border-amber-400"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <span className="w-7 h-7 rounded-lg bg-neutral-800 text-neutral-300 group-hover:bg-amber-500 group-hover:text-black font-mono text-xs font-bold flex items-center justify-center shrink-0 transition-colors">
                               {stop.seq}
                             </span>
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors truncate">
-                                  {lang === 'tc' ? stop.name_tc : stop.name_en}
-                                </h4>
-                                {isClosest && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40">
-                                    {lang === 'tc' ? '最近站點' : 'Closest'}
-                                  </span>
-                                )}
-                              </div>
+                              <h4 className="text-sm font-bold text-white group-hover:text-amber-300 transition-colors truncate">
+                                {lang === 'tc' ? stop.name_tc : stop.name_en}
+                              </h4>
                               <p className="text-xs text-neutral-400 truncate">
                                 {lang === 'tc' ? stop.name_en : stop.name_tc}
                               </p>
@@ -655,15 +555,9 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                           </div>
 
                           <div className="flex items-center gap-2.5 shrink-0 ml-3">
-                            {stop.distanceKm !== null && stop.distanceKm !== undefined && (
-                              <span className="text-xs font-mono font-medium text-amber-400/90 flex items-center gap-1">
-                                <MapPin className="w-3 h-3" />
-                                {formatDistance(stop.distanceKm)}
-                              </span>
-                            )}
                             <span className="text-xs font-semibold text-neutral-400 group-hover:text-amber-400 flex items-center gap-1">
                               {lang === 'tc' ? '查看到站' : 'View ETA'}
-                              <ArrowRight className="w-3.5 h-3.5" />
+                              <ChevronRight className="w-3.5 h-3.5" />
                             </span>
                           </div>
                         </button>
