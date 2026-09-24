@@ -277,7 +277,13 @@ export const FavoritesDrawer: React.FC<FavoritesDrawerProps> = ({
                         {lang === 'tc' ? fav.stopName_tc : fav.stopName_en}
                       </h4>
                       <p className="text-xs text-neutral-400 truncate mt-0.5">
-                        {lang === 'tc' ? `往: ${fav.dest_tc}` : `To: ${fav.dest_en}`}
+                        {lang === 'tc'
+                          ? fav.orig_tc
+                            ? `行車方向：${fav.orig_tc} > ${fav.dest_tc}`
+                            : `往: ${fav.dest_tc}`
+                          : fav.orig_en
+                          ? `Direction: ${fav.orig_en} > ${fav.dest_en}`
+                          : `To: ${fav.dest_en}`}
                       </p>
                     </div>
 

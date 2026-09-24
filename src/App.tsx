@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { BusCompany, StopItem, FavoriteItem, DisplayTheme, Language } from './types/bus';
+import { BusCompany, StopItem, FavoriteItem, DisplayTheme, Language, SelectedRouteStop } from './types/bus';
 import { BigDisplay } from './components/BigDisplay';
 import { RouteSelectorModal } from './components/RouteSelectorModal';
 import { FavoritesDrawer } from './components/FavoritesDrawer';
 import { GithubGuideModal } from './components/GithubGuideModal';
+import { getRoutes } from './services/busApi';
 import {
   getFavorites,
   saveFavorites,
@@ -21,7 +22,7 @@ import {
 } from './services/storage';
 
 // Default starter route (KMB 1A - iconic HK bus route from Sau Mau Ping to Star Ferry)
-const DEFAULT_SELECTION = {
+const DEFAULT_SELECTION: SelectedRouteStop = {
   company: 'kmb' as BusCompany,
   route: '1A',
   bound: 'O',
@@ -32,12 +33,14 @@ const DEFAULT_SELECTION = {
     name_tc: '中秀茂坪 (KT975)',
     name_en: 'Sau Mau Ping (Central) (KT975)',
   },
+  orig_tc: '中秀茂坪',
+  orig_en: 'Sau Mau Ping (Central)',
   dest_tc: '尖沙咀碼頭',
   dest_en: 'Star Ferry',
 };
 
 export default function App() {
-  const [currentSelection, setCurrentSelection] = useState(() => {
+  const [currentSelection, setCurrentSelection] = useState<SelectedRouteStop>(() => {
     const saved = getLastSelected();
     return saved || DEFAULT_SELECTION;
   });
@@ -56,6 +59,34 @@ export default function App() {
   useEffect(() => {
     saveLastSelected(currentSelection);
   }, [currentSelection]);
+
+  // Auto-resolve orig_tc and dest_tc if missing from an old saved session
+  useEffect(() => {
+    if (!currentSelection.orig_tc) {
+      getRoutes(currentSelection.company)
+        .then((routesList) => {
+          const match = routesList.find(
+            (r) =>
+              r.route.toUpperCase() === currentSelection.route.toUpperCase() &&
+              (r.bound === currentSelection.bound ||
+                (r.bound === 'O' && currentSelection.bound === 'outbound') ||
+                (r.bound === 'I' && currentSelection.bound === 'inbound') ||
+                (r.bound === 'outbound' && currentSelection.bound === 'O') ||
+                (r.bound === 'inbound' && currentSelection.bound === 'I'))
+          );
+          if (match) {
+            setCurrentSelection((prev) => ({
+              ...prev,
+              orig_tc: match.orig_tc,
+              orig_en: match.orig_en,
+              dest_tc: match.dest_tc,
+              dest_en: match.dest_en,
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentSelection.route, currentSelection.company, currentSelection.bound, currentSelection.orig_tc]);
 
   // Check if current stop is in favorites
   const isCurrentFavorite = favorites.some(
@@ -88,6 +119,8 @@ export default function App() {
         stopSeq: currentSelection.stop.seq,
         stopName_tc: currentSelection.stop.name_tc,
         stopName_en: currentSelection.stop.name_en,
+        orig_tc: currentSelection.orig_tc,
+        orig_en: currentSelection.orig_en,
         dest_tc: currentSelection.dest_tc,
         dest_en: currentSelection.dest_en,
         nlbRouteId: currentSelection.nlbRouteId,
@@ -124,6 +157,8 @@ export default function App() {
         name_tc: fav.stopName_tc,
         name_en: fav.stopName_en,
       },
+      orig_tc: fav.orig_tc,
+      orig_en: fav.orig_en,
       dest_tc: fav.dest_tc,
       dest_en: fav.dest_en,
       nlbRouteId: fav.nlbRouteId,
@@ -159,6 +194,8 @@ export default function App() {
         bound={currentSelection.bound}
         serviceType={currentSelection.serviceType}
         stop={currentSelection.stop}
+        orig_tc={currentSelection.orig_tc}
+        orig_en={currentSelection.orig_en}
         dest_tc={currentSelection.dest_tc}
         dest_en={currentSelection.dest_en}
         nlbRouteId={currentSelection.nlbRouteId}

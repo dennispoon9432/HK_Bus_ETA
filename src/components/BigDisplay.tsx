@@ -38,6 +38,8 @@ interface BigDisplayProps {
   bound: string;
   serviceType: string;
   stop: StopItem;
+  orig_tc?: string;
+  orig_en?: string;
   dest_tc: string;
   dest_en: string;
   nlbRouteId?: string;
@@ -61,6 +63,8 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
   bound,
   serviceType,
   stop,
+  orig_tc,
+  orig_en,
   dest_tc,
   dest_en,
   nlbRouteId,
@@ -686,14 +690,46 @@ export const BigDisplay: React.FC<BigDisplayProps> = ({
             {/* Destination & Direction */}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold tracking-wider text-amber-400/90 uppercase mb-0.5">
-                <Compass className="w-3.5 h-3.5" />
-                <span>{lang === 'tc' ? '行車方向' : 'Towards'}</span>
+                <Compass className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  {lang === 'tc'
+                    ? orig_tc
+                      ? `行車方向：${orig_tc} > ${dest_tc}`
+                      : `行車方向：往 ${dest_tc}`
+                    : orig_en
+                    ? `Direction: ${orig_en} > ${dest_en}`
+                    : `Towards: ${dest_en}`}
+                </span>
               </div>
-              <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white truncate tracking-tight">
-                {lang === 'tc' ? dest_tc : dest_en}
+              <h1 className="text-xl sm:text-3xl lg:text-4xl font-black text-white truncate tracking-tight flex items-center gap-1.5 sm:gap-2">
+                {lang === 'tc' ? (
+                  orig_tc ? (
+                    <>
+                      <span className="text-neutral-300 font-bold">{orig_tc}</span>
+                      <span className="text-amber-400 font-black">&gt;</span>
+                      <span className="text-white">{dest_tc}</span>
+                    </>
+                  ) : (
+                    dest_tc
+                  )
+                ) : orig_en ? (
+                  <>
+                    <span className="text-neutral-300 font-bold">{orig_en}</span>
+                    <span className="text-amber-400 font-black">&gt;</span>
+                    <span className="text-white">{dest_en}</span>
+                  </>
+                ) : (
+                  dest_en
+                )}
               </h1>
-              <p className="text-xs sm:text-sm text-neutral-400 truncate">
-                {lang === 'tc' ? dest_en : dest_tc}
+              <p className="text-xs sm:text-sm text-neutral-400 truncate mt-0.5">
+                {lang === 'tc'
+                  ? orig_en
+                    ? `${orig_en} > ${dest_en}`
+                    : dest_en
+                  : orig_tc
+                  ? `${orig_tc} > ${dest_tc}`
+                  : dest_tc}
               </p>
             </div>
           </div>

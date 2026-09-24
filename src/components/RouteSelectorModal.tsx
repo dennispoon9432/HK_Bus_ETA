@@ -21,6 +21,8 @@ interface RouteSelectorModalProps {
     bound: string;
     serviceType: string;
     stop: StopItem;
+    orig_tc?: string;
+    orig_en?: string;
     dest_tc: string;
     dest_en: string;
     nlbRouteId?: string;
@@ -88,11 +90,37 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
     );
   }, [routes, searchQuery]);
 
+  // Matching variants (all directions/bounds of the selected route)
+  const routeVariants = useMemo(() => {
+    if (!selectedRoute) return [];
+    const list = routes.filter(
+      (r) =>
+        r.company === selectedRoute.company &&
+        r.route.toUpperCase() === selectedRoute.route.toUpperCase()
+    );
+    const seen = new Set<string>();
+    const uniqueList: RouteItem[] = [];
+    for (const item of list) {
+      const key = `${item.bound}_${item.serviceType}_${item.orig_tc}_${item.dest_tc}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueList.push(item);
+      }
+    }
+    return uniqueList.length > 0 ? uniqueList : [selectedRoute];
+  }, [routes, selectedRoute]);
+
   // Handle route selection -> load directions and stops
   const handleSelectRoute = async (routeItem: RouteItem) => {
     setSelectedRoute(routeItem);
     setSelectedBound(routeItem.bound);
     await loadStops(routeItem.company, routeItem.route, routeItem.bound, routeItem.serviceType, routeItem.nlbRouteId);
+  };
+
+  const handleSelectVariant = async (variant: RouteItem) => {
+    setSelectedRoute(variant);
+    setSelectedBound(variant.bound);
+    await loadStops(variant.company, variant.route, variant.bound, variant.serviceType, variant.nlbRouteId);
   };
 
   const loadStops = async (
@@ -112,19 +140,6 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
     } finally {
       setIsLoadingStops(false);
     }
-  };
-
-  // Handle direction switch
-  const handleDirectionSwitch = async (newBound: string) => {
-    if (!selectedRoute) return;
-    setSelectedBound(newBound);
-    await loadStops(
-      selectedRoute.company,
-      selectedRoute.route,
-      newBound,
-      selectedRoute.serviceType,
-      selectedRoute.nlbRouteId
-    );
   };
 
   // Filter stops by text
@@ -388,11 +403,14 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                     {selectedRoute.route}
                   </span>
                   <div>
-                    <h3 className="text-sm font-bold text-white">
-                      {lang === 'tc'
-                        ? `${selectedRoute.orig_tc} ➔ ${selectedRoute.dest_tc}`
-                        : `${selectedRoute.orig_en} ➔ ${selectedRoute.dest_en}`}
-                    </h3>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-xs text-amber-400 font-semibold">{lang === 'tc' ? '行車方向：' : 'Direction: '}</span>
+                      <h3 className="text-sm font-bold text-white">
+                        {lang === 'tc'
+                          ? `${selectedRoute.orig_tc} > ${selectedRoute.dest_tc}`
+                          : `${selectedRoute.orig_en} > ${selectedRoute.dest_en}`}
+                      </h3>
+                    </div>
                     <p className="text-xs text-neutral-400">
                       {selectedRoute.company.toUpperCase()} ·{' '}
                       {lang === 'tc' ? '共' : 'Total'}{' '}
@@ -415,47 +433,50 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
               </div>
 
               {/* Direction Selector (Bound) */}
-              {selectedRoute.company !== 'nlb' && (
+              {routeVariants.length > 1 && (
                 <div>
                   <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                    {lang === 'tc' ? '選擇行車方向' : 'Select Bound / Direction'}
+                    {lang === 'tc' ? '選擇行車方向' : 'Select Direction / Bound'}
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleDirectionSwitch('outbound')}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        selectedBound === 'outbound' || selectedBound === 'O'
-                          ? 'bg-amber-950/40 border-amber-500 text-white ring-1 ring-amber-500/50'
-                          : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:bg-neutral-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 mb-1">
-                        <Compass className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{lang === 'tc' ? '去程 (Outbound)' : 'Outbound'}</span>
-                      </div>
-                      <p className="text-sm font-bold text-white truncate">
-                        {lang === 'tc' ? `往: ${selectedRoute.dest_tc}` : `To: ${selectedRoute.dest_en}`}
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDirectionSwitch('inbound')}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        selectedBound === 'inbound' || selectedBound === 'I'
-                          ? 'bg-amber-950/40 border-amber-500 text-white ring-1 ring-amber-500/50'
-                          : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:bg-neutral-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 text-xs font-semibold text-neutral-400 mb-1">
-                        <Compass className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{lang === 'tc' ? '回程 (Inbound)' : 'Inbound'}</span>
-                      </div>
-                      <p className="text-sm font-bold text-white truncate">
-                        {lang === 'tc' ? `往: ${selectedRoute.orig_tc}` : `To: ${selectedRoute.orig_en}`}
-                      </p>
-                    </button>
+                  <div
+                    className={`grid gap-2.5 ${
+                      routeVariants.length === 2
+                        ? 'grid-cols-1 sm:grid-cols-2'
+                        : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                    }`}
+                  >
+                    {routeVariants.map((variant) => {
+                      const isSelected =
+                        selectedRoute.id === variant.id ||
+                        (selectedRoute.bound === variant.bound &&
+                          selectedRoute.serviceType === variant.serviceType &&
+                          selectedRoute.dest_tc === variant.dest_tc);
+                      return (
+                        <button
+                          key={variant.id}
+                          type="button"
+                          onClick={() => handleSelectVariant(variant)}
+                          className={`p-3 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? 'bg-amber-950/40 border-amber-500 text-white ring-1 ring-amber-500/50 shadow-md shadow-amber-950/40'
+                              : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:bg-neutral-800 hover:border-neutral-700'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-400 mb-1">
+                            <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{lang === 'tc' ? '往' : 'To'}:</span>
+                            <span className="font-bold text-amber-300 truncate">
+                              {lang === 'tc' ? variant.dest_tc : variant.dest_en}
+                            </span>
+                          </div>
+                          <p className="text-sm font-bold text-white truncate">
+                            {lang === 'tc'
+                              ? `${variant.orig_tc} > ${variant.dest_tc}`
+                              : `${variant.orig_en} > ${variant.dest_en}`}
+                          </p>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -517,23 +538,16 @@ export const RouteSelectorModal: React.FC<RouteSelectorModalProps> = ({
                           key={stop.stopId}
                           type="button"
                           onClick={() => {
-                            const destName_tc =
-                              selectedBound === 'inbound' || selectedBound === 'I'
-                                ? selectedRoute.orig_tc
-                                : selectedRoute.dest_tc;
-                            const destName_en =
-                              selectedBound === 'inbound' || selectedBound === 'I'
-                                ? selectedRoute.orig_en
-                                : selectedRoute.dest_en;
-
                             onSelect({
                               company: selectedRoute.company,
                               route: selectedRoute.route,
-                              bound: selectedBound,
+                              bound: selectedRoute.bound,
                               serviceType: selectedRoute.serviceType,
                               stop,
-                              dest_tc: destName_tc,
-                              dest_en: destName_en,
+                              orig_tc: selectedRoute.orig_tc,
+                              orig_en: selectedRoute.orig_en,
+                              dest_tc: selectedRoute.dest_tc,
+                              dest_en: selectedRoute.dest_en,
                               nlbRouteId: selectedRoute.nlbRouteId,
                             });
                             onClose();

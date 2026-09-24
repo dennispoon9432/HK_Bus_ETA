@@ -47,11 +47,26 @@ export interface FavoriteItem {
   stopSeq: number;
   stopName_tc: string;
   stopName_en: string;
+  orig_tc?: string;
+  orig_en?: string;
   dest_tc: string;
   dest_en: string;
   customLabel?: string;
   nlbRouteId?: string;
   createdAt: number;
+}
+
+export interface SelectedRouteStop {
+  company: BusCompany;
+  route: string;
+  bound: string;
+  serviceType: string;
+  stop: StopItem;
+  orig_tc?: string;
+  orig_en?: string;
+  dest_tc: string;
+  dest_en: string;
+  nlbRouteId?: string;
 }
 
 export type DisplayTheme = 'led-amber' | 'cyber-dark' | 'clean-light' | 'bus-stop-green';
