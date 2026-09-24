@@ -1,0 +1,6 @@
+{
+  "name": "HK Bus ETA - Hong Kong Bus Arrival Times",
+  "description": "Large-screen real-time arrival display for Hong Kong buses (KMB, LWB, Citybus, NLB) with route selection, sequential stops, and favorites.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
